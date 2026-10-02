@@ -15,6 +15,7 @@ stubs="${STUB_DIR:-/home/user/stubs}"
 sub="${GOLD_SUBMISSION:-/home/user/gold-submission.tar.gz}"
 
 "$root/scripts/make_stubs.sh" "$stubs" >/dev/null
+[ -f "$sub" ] || "$root/scripts/make_gold_submission.sh" "$sub"
 
 run_suite() {  # run_suite IMAGE EXECUTABLE_PATH [extra docker args...]
   local img="$1" exe="$2"; shift 2
