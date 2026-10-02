@@ -3,12 +3,11 @@
 # repo's reimplementation of the harness flow.
 #
 # Registers the task in a throwaway copy of the ProgramBench checkout, builds the
-# local test blob it expects, tags the reference-free eval image under the name
-# and tag the CLI looks for, then runs `eval` and `info`.
+# local test blob it expects, then runs `eval` and `info` against the task image.
 #
 # Usage: scripts/programbench_eval.sh SUBMISSION.tar.gz [PROGRAMBENCH_CHECKOUT]
 #   With no checkout given, facebookresearch/programbench is cloned (needs network).
-# Needs: docker, uv, and the eval image from `scripts/build_task_image.sh --eval`.
+# Needs: docker, uv, and the task image from `scripts/build_task_image.sh`.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,7 +28,6 @@ branch="$(python3 -c "import json,sys; print(next(iter(json.load(open(sys.argv[1
 mkdir -p "$work/blobs/$iid/tests" "$work/run/$iid"
 tar czf "$work/blobs/$iid/tests/$branch.tar.gz" --exclude=__pycache__ -C "$task" eval
 cp "$sub" "$work/run/$iid/submission.tar.gz"
-docker tag "mvdan_1776_sh.9a79a44:eval_v1" "programbench/mvdan_1776_sh.9a79a44:task_cleanroom_v6"
 
 export PROGRAMBENCH_BLOB_DIR="$work/blobs"
 "$work/venv/bin/programbench" eval "$work/run" --docker-cpus "${DOCKER_CPUS:-$(nproc)}" -w 1

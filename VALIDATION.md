@@ -91,7 +91,7 @@ assertion would have walked straight into.
 ## Difficulty — not yet measured
 
 The brief's bar is *a leading model scores below 70% on average*. **That number has
-not been measured.** It needs agent rollouts against the inference image, which the
+not been measured.** It needs agent rollouts against the task image, which the
 authoring environment (no model API access) could not run. `difficulty: hard` in
 `task.yaml` is an estimate.
 
@@ -100,10 +100,11 @@ authoring environment (no model API access) could not run. `difficulty: hard` in
 - Frontier models only; about 8 independent runs; own Claude Code / Codex
   subscription acceptable.
 - The agent receives only the executable and the user-facing docs in `agent_docs/`
-  (the man page and `--help`), plus `docs/TASK.md`.
+  (the man page and `--help`) in `/workspace`. It is not given `docs/TASK.md`.
 - Score = flat, unweighted percentage of non-ignored tests. No weights, no
   mandatory categories. Mean over runs must be below 70%.
-- Control = no internet + source stripped from the image. Run calibration offline,
+- Control = no internet + source stripped from the image (the official runner
+  uses `--network none`). Run calibration offline,
   otherwise the number is meaningless.
 - The recommended baseline is the mini-swe-agent ProgramBench runner (linked from
   the ProgramBench README). It keeps the model on the host and the container on
@@ -112,11 +113,32 @@ authoring environment (no model API access) could not run. `difficulty: hard` in
   conflicts with that; confirm with the client before using one that way.
 
 ```bash
-scripts/build_task_image.sh                          # inference image
-# run each agent in it; save /workspace as <run>/mvdan__sh.9a79a44/submission.tar.gz
-scripts/build_task_image.sh --eval                   # reference-free image the scorer uses
-scripts/programbench_eval.sh <submission.tar.gz>     # ProgramBench's own scorer
+scripts/build_task_image.sh
+export ANTHROPIC_API_KEY=...          # or whichever key the model needs
+MODEL=<litellm model name> RUNS=8 PARALLEL=2 scripts/run_agent.sh
 ```
+
+`run_agent.sh` registers the task with ProgramBench, runs N independent agents with
+the official mini-swe-agent config (prompt, 1000-step limit, 6 h wall limit,
+`--network none`, `--user agent`, no ptrace), scores each submission with
+`programbench eval`, and prints each run and the mean against the 70% bar. It
+resumes: a run whose submission already exists is skipped.
+
+**Cost and time are unmeasured and may be large.** The official config has no cost
+cap (`cost_limit: 0`) and allows 6 hours per run. Eight runs at a frontier model's
+prices could be expensive, and mini-swe-agent needs an API key; a Claude Code or
+Codex *subscription* cannot be used through it. `COST_LIMIT` caps spend per run but
+only works when the model's prices are known to litellm.
+
+### Pipeline self-test (no API key)
+
+A scripted, five-step "agent" that implements only `-h` and `--version` was run
+through the real runner and the real evaluator, twice in parallel via
+`run_agent.sh`. Predicted score: 2 of 112 tests. Observed: 2/112 on both runs, no
+errors or warnings, submitted-binary hash different from the reference. This
+verifies container start-up under the official flags, the workspace contract, the
+submission tarball, offline compilation as root, scoring, and the mean. It does
+**not** measure difficulty.
 
 ### Reading the result
 
@@ -140,6 +162,38 @@ scripts/programbench_eval.sh <submission.tar.gz>     # ProgramBench's own scorer
    but the space of possible messages is unbounded. The client has no public answer
    on whether undocumented-but-probeable behaviour is in scope (their Q12);
    confirm before submission, and drop or loosen these if they object.
+
+## What the official runner found
+
+Reading and running mini-swe-agent's ProgramBench runner exposed that the first
+version of the image could not have been used for the 8 runs at all:
+
+1. **No `agent` user.** The runner passes `--user agent`; the container would not
+   start. Fixed.
+2. **No `./executable` in `/workspace`.** The prompt tells the agent the binary is
+   there; mine was at `/opt/reference/bin`. The reference now lives at
+   `/workspace/executable` with docs in `/workspace/docs`, and the separate
+   "reference-free eval image" is gone: ProgramBench's evaluator uses the same
+   image and wipes `/workspace` before building, with `eval_clean_hashes` deleting
+   any surviving copy of the reference.
+3. **No git repository.** The agent is told to commit. The workspace is now a
+   repository.
+4. **Root-owned evaluation of an agent-owned repo.** Found by the self-test: the
+   evaluator builds as root, git refuses the agent-owned repository, and `go build`
+   fails VCS stamping, so a correct Go submission would score 0 with no warning and
+   no way for the agent to see it. Fixed with a system-wide `safe.directory`.
+
+Also: the old design rebuilt the reference from the `golang:1.26` tag, so a
+toolchain update would silently change its bytes and disarm `eval_clean_hashes`. The
+build now asserts the rebuilt binary's sha256 and fails loudly instead.
+
+**Not yet re-verified from scratch:** after items 2–4 the image was last fully
+rebuilt before the `safe.directory` and hash-assertion lines were added. Docker Hub's
+anonymous rate limit (100 pulls/hour on a shared IP) blocked further rebuilds here.
+The fix was verified by overlaying that single line on the local image, and the
+hash-assertion line was checked against the committed binary (passes) and a wrong
+hash (fails). Run `scripts/build_task_image.sh` and `scripts/validate.sh` once on an
+unrestricted network to confirm the Dockerfile builds clean.
 
 ## Provenance
 

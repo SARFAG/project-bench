@@ -1,14 +1,20 @@
 # Task: rebuild `shfmt`
 
-A compiled reference program is installed as `shfmt` (`/opt/reference/bin/shfmt`),
-and its documentation is in `/opt/reference/doc/`:
+> **Reviewer-facing description.** The benchmark agent does *not* see this file. It
+> receives the standard ProgramBench prompt (mini-swe-agent's `programbench.yaml`)
+> plus what is in the workspace. Everything below describes that workspace and the
+> scored scope.
 
-| File | What it is |
+The agent starts in `/workspace`, which contains:
+
+| Path | What it is |
 | --- | --- |
-| `shfmt.1.scd` | The program's man page, in scdoc source form (readable prose) |
-| `shfmt-help.txt` | The program's own `--help` output |
+| `./executable` | The compiled reference program |
+| `./docs/shfmt.1.scd` | The program's man page, in scdoc source form (readable prose) |
+| `./docs/shfmt-help.txt` | The program's own `--help` output |
 
-No source code for the program is present on the image.
+The workspace is a git repository (one commit, containing `docs/`) that ignores
+`executable`. No source code for the program is on the image.
 
 ## What you must produce
 
@@ -19,8 +25,8 @@ In `/workspace`:
    `./executable` at the workspace root.
 
 `compile.sh` runs **with the network blocked**, so vendor or inline every
-dependency you need. A Go toolchain (`/usr/local/go`) and a C/C++ toolchain are
-on the image; you may implement in any language the image can build.
+dependency you need. A Go toolchain (`/usr/local/go`) and Python are on the image; implement in any
+language the image can build.
 
 Your `./executable` is then run against a hidden behavioral test suite that
 compares its observable behavior — stdout, stderr, exit status, and the files it

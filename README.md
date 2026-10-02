@@ -28,7 +28,7 @@ tasks/mvdan__sh.9a79a44/
 ├── task.yaml          # repository, commit, language, difficulty, anti-copy hash
 ├── tests.json         # scored test ids, grouped into one branch
 ├── Dockerfile         # builds reference/src, then strips the source
-├── docs/TASK.md       # the agent-facing brief, including what is out of scope
+├── docs/TASK.md       # reviewer-facing description of the workspace and scored scope
 ├── agent_docs/        # the ONLY documentation the agent sees (man page + --help)
 ├── reference/
 │   ├── src/           # reference source at the pinned commit (BSD-3), unmodified
@@ -44,13 +44,28 @@ tasks/mvdan__sh.9a79a44/
         ├── test_file_modes.py         # paths, -l -d -w -f (22)
         └── test_cli_errors.py         # stdin, diagnostics, exit codes (15)
 scripts/
-├── build_task_image.sh   # build inference or eval image
+├── build_task_image.sh   # build the task image (programbench/...:task_cleanroom_v6)
+├── run_agent.sh          # N independent agent runs + scoring (difficulty calibration)
+├── score_runs.py         # per-run and mean score, as `programbench info` computes it
 ├── make_stubs.sh         # build the deliberately-wrong programs
 ├── make_gold_submission.sh  # build the reference solution tarball from reference/src
 ├── gen_tests_json.py     # regenerate tests.json from a gold JUnit report
 ├── validate.sh           # the validation matrix, run through this repo's own flow
 └── programbench_eval.sh  # the same submissions scored by ProgramBench's real CLI
 ```
+
+## Image contract (what the official agent runner requires)
+
+Learned by running the real mini-swe-agent ProgramBench runner against the image
+rather than assumed. The image must have:
+
+- a user named `agent` (the runner starts containers with `--user agent`);
+- the reference at `/workspace/executable` and docs under `/workspace/docs`, because
+  the agent prompt says "the executable is located at `./executable`";
+- `/workspace` as a git repository the agent can commit into;
+- `git config --system safe.directory '*'`, because the harness unpacks and builds the
+  submission as root while the repository is owned by `agent`; without it `go build`
+  fails VCS stamping at evaluation even though it worked for the agent.
 
 ## Harness contract
 
@@ -65,7 +80,7 @@ Taken from the ProgramBench harness rather than assumed:
 - Every command runs through `bash -lc`, a *login* shell. On Debian that re-sources
   `/etc/profile` and resets `PATH`, discarding the image's `ENV PATH`. Tools the
   build needs must therefore sit on the default login `PATH`; the Dockerfile
-  symlinks `go` (and `shfmt`, in the inference image) into `/usr/local/bin`.
+  symlinks `go` into `/usr/local/bin`.
 - `eval_clean_hashes` in `task.yaml` is the sha256 of the reference binary; the
   harness deletes any file in a submission that matches it, so a submission
   cannot pass by shipping a copy of the reference.
@@ -77,8 +92,7 @@ reference, a stub, or a real submission.
 ## Build and validate
 
 ```bash
-scripts/build_task_image.sh          # inference image (reference + docs present)
-scripts/build_task_image.sh --eval   # eval image   (reference removed)
+scripts/build_task_image.sh          # the task image; serves the agent run and the evaluation
 scripts/validate.sh                  # the validation matrix
 scripts/programbench_eval.sh SUBMISSION.tar.gz   # score with ProgramBench's real CLI
 ```
@@ -119,6 +133,8 @@ found and fixed during authoring.
 - **Build stamps are never asserted.** `--version` embeds the commit and varies
   with clone depth for the same commit; it is checked only for exit 0 and one
   non-empty line.
-- **Scope is stated to the agent.** `docs/TASK.md` names the three subsystems
-  that exist in the reference but are not scored (`--to-json`/`--from-json`,
-  EditorConfig, `--detect`), so no agent budget is burnt on unscored surface.
+- **Scope is not stated to the agent.** The official agent prompt is generic and the
+  workspace holds only the binary and `docs/`, so the agent is *not* told that
+  `--to-json`/`--from-json`, EditorConfig and `--detect` are unscored (they are in
+  the man page). That costs it effort, not points, and is inherent to the benchmark;
+  `docs/TASK.md` records the scope for reviewers only.
