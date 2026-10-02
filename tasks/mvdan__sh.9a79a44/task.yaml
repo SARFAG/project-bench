@@ -1,0 +1,6 @@
+repository: mvdan/sh
+commit: 9a79a445faf5243da3c26be7d745c2cb17f27823
+language: go
+difficulty: hard
+eval_clean_hashes:
+- 8e5814c161f65bec980f7ec4a67e661498bc7250ef31f002b5c55a3da3a87da9
