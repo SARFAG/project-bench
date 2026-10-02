@@ -26,25 +26,19 @@ COPY ca/ /usr/local/share/ca-certificates/extra/
 RUN find /usr/local/share/ca-certificates/extra -name '*.crt' -print -quit | grep -q . \
       && update-ca-certificates || true
 
-ARG SH_REPO=https://github.com/mvdan/sh
-ARG SH_COMMIT=9a79a445faf5243da3c26be7d745c2cb17f27823
-
-RUN git clone --filter=blob:none "${SH_REPO}" /src \
- && git -C /src checkout --detach "${SH_COMMIT}"
+# The reference source ships in the task package (reference/src) and is built
+# here; the final stage never copies it, so the agent image has no source.
+COPY reference/src /src
 
 # -trimpath and -s -w keep host paths and debug info out of the binary.
 RUN cd /src \
  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /ref/bin/shfmt ./cmd/shfmt
 
-# Documentation handed to the agent: the upstream man page source, the upstream
-# README, the licence, and the program's own usage text. The man page is shipped
-# in scdoc source form (readable prose) because rendering it would need a
-# package install, which the offline image build cannot do.
-RUN mkdir -p /ref/doc \
- && cp /src/cmd/shfmt/shfmt.1.scd /ref/doc/shfmt.1.scd \
- && cp /src/README.md /ref/doc/README.upstream.md \
- && cp /src/LICENSE /ref/doc/LICENSE.upstream \
- && (/ref/bin/shfmt --help > /ref/doc/shfmt-help.txt 2>&1 || true)
+# Documentation handed to the agent: only the man page (scdoc source, readable
+# prose) and the program's own --help text. Nothing else from the project.
+COPY agent_docs /ref/doc
+SHELL ["/bin/bash", "-c"]
+RUN diff <(/ref/bin/shfmt --help 2>&1) /ref/doc/shfmt-help.txt
 
 
 FROM python:${PYTHON_VERSION}-bookworm
@@ -57,17 +51,23 @@ RUN find /usr/local/share/ca-certificates/extra -name '*.crt' -print -quit | gre
 # image needs no package manager access.
 COPY --from=gotoolchain /usr/local/go /usr/local/go
 ENV GOPATH=/go
-ENV PATH=/usr/local/go/bin:/go/bin:/opt/reference/bin:$PATH
+ENV PATH=/usr/local/go/bin:/go/bin:$PATH
+# The harness runs every command through `bash -lc`. A login shell re-sources
+# /etc/profile, which resets PATH and discards the ENV line above, so tools must
+# also be reachable from the default login PATH.
+RUN ln -s /usr/local/go/bin/go /usr/local/bin/go \
+ && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 
 # Test runner. The harness executes pytest inside this image and reads
 # eval/results.xml afterwards.
-RUN pip install --no-cache-dir "pytest>=8" "pytest-timeout>=2.4" "pytest-xdist>=3"
+RUN pip install --no-cache-dir "pytest>=8" "pytest-timeout>=2.4" "pytest-xdist>=3" "pytest-rerunfailures==16.4"
 
 COPY --from=reference /ref /opt/reference
 
 # KEEP_REFERENCE=0 produces the evaluation image: the reference program and its
 # documentation are removed so only the submission's own build is measured.
 ARG KEEP_REFERENCE=1
-RUN if [ "${KEEP_REFERENCE}" = "0" ]; then rm -rf /opt/reference; fi
+RUN if [ "${KEEP_REFERENCE}" = "0" ]; then rm -rf /opt/reference; \
+    else ln -s /opt/reference/bin/shfmt /usr/local/bin/shfmt; fi
 
 WORKDIR /workspace

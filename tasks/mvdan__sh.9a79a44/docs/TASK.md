@@ -1,14 +1,12 @@
 # Task: rebuild `shfmt`
 
-A compiled reference program is at `/opt/reference/bin/shfmt`, and its
-documentation is in `/opt/reference/doc/`:
+A compiled reference program is installed as `shfmt` (`/opt/reference/bin/shfmt`),
+and its documentation is in `/opt/reference/doc/`:
 
 | File | What it is |
 | --- | --- |
-| `shfmt.1.scd` | Upstream man page, in scdoc source form (readable prose) |
+| `shfmt.1.scd` | The program's man page, in scdoc source form (readable prose) |
 | `shfmt-help.txt` | The program's own `--help` output |
-| `README.upstream.md` | Upstream project README |
-| `LICENSE.upstream` | Upstream licence (BSD 3-clause) |
 
 No source code for the program is present on the image.
 

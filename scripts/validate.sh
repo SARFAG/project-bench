@@ -20,7 +20,7 @@ sub="${GOLD_SUBMISSION:-/home/user/gold-submission.tar.gz}"
 run_suite() {  # run_suite IMAGE EXECUTABLE_PATH [extra docker args...]
   local img="$1" exe="$2"; shift 2
   docker run --rm --network none -v "$task/eval:/workspace/eval:ro" "$@" "$img" \
-    bash -c "cd /workspace && PROGRAMBENCH_EXECUTABLE='$exe' pytest eval/tests -q -p no:cacheprovider 2>&1 | tail -1"
+    bash -lc "cd /workspace && PROGRAMBENCH_EXECUTABLE='$exe' pytest eval/tests -q -p no:cacheprovider 2>&1 | tail -1"
 }
 
 printf '%-26s %s\n' "RUN" "RESULT"
@@ -32,6 +32,6 @@ done
 # The gold submission goes through the real contract: extract, offline compile.sh, run.
 printf '%-26s ' "gold submission (offline)"
 docker run --rm --network none -v "$sub:/in/submission.tar.gz:ro" -v "$task/eval:/in/eval:ro" "$eval_img" \
-  bash -c 'set -e; cd /workspace && tar xzf /in/submission.tar.gz && rm -f ./executable \
+  bash -lc 'set -e; cd /workspace && tar xzf /in/submission.tar.gz && rm -f ./executable \
     && ./compile.sh >/dev/null 2>&1 && cp -r /in/eval /workspace/eval \
     && pytest eval/tests -q -p no:cacheprovider 2>&1 | tail -1'

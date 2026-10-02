@@ -63,50 +63,20 @@ def test_filename_is_rejected_alongside_a_path_argument(run, tree):
     assert (p.returncode, p.stdout, p.stderr) == (1, "", "-filename can only be used with stdin\n")
 
 
-@pytest.mark.parametrize(("flag",), [("-h",), ("--help",)])
-def test_help_goes_to_stderr_and_exits_0(run, flag):
-    p = run(flag)
-    assert (p.returncode, p.stdout) == (0, "")
-    assert p.stderr.startswith("usage: shfmt [flags] [path ...]\n")
-
-
-@pytest.mark.parametrize(
-    ("section",),
-    [("Parser options:",), ("Printer options:",), ("Utilities:",)],
-)
-def test_help_documents_each_option_group(run, section):
-    assert section in run("--help").stderr
-
-
-@pytest.mark.parametrize(
-    ("option",),
-    [
-        ("--version",),
-        ("--list",),
-        ("--write",),
-        ("--diff",),
-        ("--filename",),
-        ("--language-dialect",),
-        ("--simplify",),
-        ("--indent",),
-        ("--binary-next-line",),
-        ("--case-indent",),
-        ("--space-redirects",),
-        ("--keep-padding",),
-        ("--block-next-line",),
-        ("--minify",),
-        ("--find",),
-    ],
-)
-def test_help_lists_every_supported_long_option(run, option):
-    assert option in run("--help").stderr
+def test_help_goes_to_stderr_and_exits_0(run):
+    """-h and --help are equivalent. The usage text itself is shipped in the
+    agent's documentation, so only its stream, status and first line are checked
+    rather than one test per documented option."""
+    for flag in ("-h", "--help"):
+        p = run(flag)
+        assert (p.returncode, p.stdout) == (0, "")
+        assert p.stderr.startswith("usage: shfmt [flags] [path ...]\n")
 
 
 def test_version_exits_0_with_a_single_nonempty_line(run):
     """The exact version string is a build stamp and is deliberately not asserted."""
     p = run("--version")
     assert p.returncode == 0
-    assert p.stdout.strip() != ""
     assert len(p.stdout.strip().splitlines()) == 1
 
 
